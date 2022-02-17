@@ -1,6 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcrypt-nodejs');
 const cors = require('cors');
+const axios = require('axios');
+// const knex = require('knex');
+
+// const { database } = require('pg/lib/defaults');
 
 const app = express();
 app.use(express.urlencoded({extended: false}));
@@ -16,8 +20,14 @@ const database = {
             password: 'robert',
             joined: new Date(),
             favoriteFacts: [
-                `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`,
-                `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
+                {
+                    id: 'asdasdasggf',
+                    value: `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`
+                },
+                {
+                    id: 'qwepoopii',
+                    value: `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
+                }
             ]
         },
         {
@@ -27,8 +37,14 @@ const database = {
             password: 'jane',
             joined: new Date(),
             favoriteFacts: [
-                `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`,
-                `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
+                {
+                    id: 'asdasdasggf',
+                    value: `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`
+                },
+                {
+                    id: 'qwepoopii',
+                    value: `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
+                }
             ]
         },
         {
@@ -38,15 +54,47 @@ const database = {
             password: 'gary',
             joined: new Date(),
             favoriteFacts: [
-                `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`,
-                `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
+                {
+                    id: 'asdasdasggf',
+                    value: `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`
+                },
+                {
+                    id: 'qwepoopii',
+                    value: `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
+                }
             ]
         }
     ]
 }
+
+// const db = knex({
+//     client: 'pg',
+//     connection: {
+//       host : '127.0.0.1',
+//       port : 5432,
+//       user : 'postgres',
+//       password : 'perazarivera1998',
+//       database : 'chuckDB'
+//     }
+// });
+
 //Get users
 app.get('/', (req, res) => {
     res.send(database.users);
+})
+
+// Get Fact from the Chuck Norris API
+app.post('/addFact', (req, res) => {
+    const {category} = req.body;
+    if (category === 'All'){
+        axios.get('https://api.chucknorris.io/jokes/random')
+        .then(response => res.json(response.data))
+        .catch(error => res.status(400).json(`Error: ${error}`))
+    } else {
+        axios.get(`https://api.chucknorris.io/jokes/random?category=${category}`)
+        .then(response => res.json(response.data))
+        .catch(error => res.status(400).json(`Error: ${error}`))
+    }
 })
 
 //Log in to account
@@ -76,25 +124,25 @@ app.post('/register', (req, res) => {
     res.json(database.users[database.users.length-1]); //res.json() is almost equal to res.send()
 })
 
-app.get('/getFavorites/:userID', (req, res) => {
-    const { userID } = req.params;
-    res.json(database.users[userID].favoriteFacts); //res.json() is almost equal to res.send()
+app.get('/getFavorites', (req, res) => {
+    // const { userID } = req.params;
+    res.json(database.users[0].favoriteFacts); //res.json() is almost equal to res.send()
 })
 
 
-app.post('/addFavorite/:userID', (req, res) => {
-    const { userID } = req.params;
+app.post('/addFavorite', (req, res) => {
+    // const { userID } = req.params;
     const { fact } = req.body;
-    database.users[userID].favoriteFacts.push(fact)
-    res.json(database.users[userID].favoriteFacts); //res.json() is almost equal to res.send()
+    database.users[0].favoriteFacts.unshift(fact)
+    res.json(database.users[0].favoriteFacts); //res.json() is almost equal to res.send()
 })
 
-app.delete('/removeFavorite/:userID', (req, res) => {
-    const { userID } = req.params;
-    const { factID } = req.body;
-    let favoriteFacts = database.users[userID].favoriteFacts;
-    database.users[userID].favoriteFacts = favoriteFacts.splice(factID, 1)
-    res.json(database.users[userID].favoriteFacts); //res.json() is almost equal to res.send()
+app.delete('/removeFavorite', (req, res) => {
+    // const { userID } = req.params;
+    const { id } = req.body;
+    let facts = database.users[0].favoriteFacts.filter(fact => fact.id !== id)
+    database.users[0].favoriteFacts = facts
+    res.json(database.users[0].favoriteFacts); //res.json() is almost equal to res.send()
 })
 
 
@@ -103,6 +151,7 @@ app.delete('/removeFavorite/:userID', (req, res) => {
 // V  /signin => Log in to account
 // V  /register => Register new account
 // V  /profile/:id => Get user profile // Probably removed in the future
+// V  /addFact => Get a fact from Chuck Norris API
 // V  /getFavorites => Returns the array with favourite facts
 // V  /addFavorite => Adds a new fact to the favourite facts array
 // V  /removeFavorite => Removes a fact from the favourite facts array
