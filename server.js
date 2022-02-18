@@ -3,8 +3,6 @@ const bcrypt = require('bcrypt-nodejs');
 const cors = require('cors');
 const axios = require('axios');
 const knex = require('knex');
-const { chuckDB } = require('pg/lib/defaults');
-const { json } = require('express/lib/response');
 
 const db = knex({
     client: 'pg',
@@ -22,61 +20,6 @@ app.use(express.urlencoded({extended: false}));
 app.use(express.json());
 app.use(cors());
 
-const database = {
-    users: [
-        {
-            id: '0',
-            name: 'Robert',
-            email: 'robert@gmail.com',
-            password: 'robert',
-            joined: new Date(),
-            favoriteFacts: [
-                {
-                    id: 'asdasdasggf',
-                    value: `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`
-                },
-                {
-                    id: 'qwepoopii',
-                    value: `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
-                }
-            ]
-        },
-        {
-            id: '1',
-            name: 'Jane',
-            email: 'jane@gmail.com',
-            password: 'jane',
-            joined: new Date(),
-            favoriteFacts: [
-                {
-                    id: 'asdasdasggf',
-                    value: `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`
-                },
-                {
-                    id: 'qwepoopii',
-                    value: `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
-                }
-            ]
-        },
-        {
-            id: '2',
-            name: 'Gary',
-            email: 'gary@gmail.com',
-            password: 'gary',
-            joined: new Date(),
-            favoriteFacts: [
-                {
-                    id: 'asdasdasggf',
-                    value: `A cab driver in Paris received a near fatal roundhouse to his face from Chuck Norris. It was Chuck Norris' way of saying Hi in French.`
-                },
-                {
-                    id: 'qwepoopii',
-                    value: `Chuck Norris once ran a quarter mile in 3.7 seconds, while pulling an 18-wheeler in wet cement.`            
-                }
-            ]
-        }
-    ]
-}
 
 //Get users
 app.get('/', (req, res) => {
@@ -99,45 +42,77 @@ app.post('/addFact', (req, res) => {
 
 //Log in to account
 app.post('/signin', (req, res) => {
-    if (req.body.email === database.users[0].email &&
-        req.body.password === database.users[0].password){
-            res.json(database.users[0]);        
-    } else {
-        res.status(400).json('error logging in');
+    const { email, password } = req.body;
+    if(!email || !password){
+        return res.status(400).json('Incorrect form submission');
     }
+    db.select('email', 'hash').from('login')
+        .where('email', '=', email)
+        .then(data => {
+            const isValid = bcrypt.compareSync(password, data[0].hash);
+            if (isValid){
+                return db.select('*').from('users')
+                    .where('email', '=', email)
+                    .then(user => {
+                        console.log('Success')
+                        res.json(user[0])
+                    })
+                    .catch(error => res.status(400).json('Unable to get user'))
+            } else {
+                res.status(400).json('Wrong credentials');
+            }
+        })
+        .catch(err => res.status(400).json('Wrong credentials'));
 })
 
 //Register new account
 app.post('/register', (req, res) => {
     const { email, name, password } = req.body;
-    // bcrypt.hash(password, null, null, function(err, hash) {
-    //     console.log(hash);
-    // });
-    const newUser = {
-        id: (Number(database.users[database.users.length-1].id) + 1).toString(),
-        name: name,
-        email: email,
-        entries: 0,
-        joined: new Date()
+    if(!email || !name || !password){
+        return res.status(400).json('Incorrect form submission');
     }
-    database.users.push(newUser)
-    res.json(database.users[database.users.length-1]); 
+    const hash = bcrypt.hashSync(password);
+    db.transaction(trx => {
+        trx.insert({
+            hash: hash,
+            email: email
+        })
+        .into('login')
+        .returning('email')
+        .then(loginEmail => {
+            return trx('users')
+            .returning('*')
+            .insert({
+                email: loginEmail[0].email, 
+                name: name,
+                joined: new Date()})
+            .then(user => {
+                res.json(user[0]); 
+            })
+        })
+        .then(trx.commit)
+        .catch(trx.rollback)
+    }).catch(err => res.status(400).json('Unable to register'));
 })
 
 app.get('/getFavorites/:userid', (req, res) => {
     const {userid} = req.params;
     db.select('facts.factid', 'facts.facttext')
     .from('users')
-    .where('users.id', userid) // Remove in future
+    .where('users.id', userid) 
     .joinRaw('left join facts on facts.factid = any (users.favoritefacts)')
     .then(favoritefacts => {
-        const formatedResp = favoritefacts.map(fact => {
-            return {
-                id: fact.factid,
-                value: fact.facttext 
-            }
-        })
-        res.json(formatedResp)
+        if (favoritefacts[0].factid === null) {//User has no favorite facts     
+            res.json('No favorite facts')
+        } else {
+            const formatedResp = favoritefacts.map(fact => {
+                return {
+                    id: fact.factid,
+                    value: fact.facttext 
+                }
+            })
+            res.json(formatedResp)
+        }
     })
     .catch(err => res.status(400).json('Unable to get account'));
 })
